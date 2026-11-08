@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="robots" content="noindex, nofollow" />
+<meta name="referrer" content="no-referrer" />
+<!-- The school panel: a school signs in with its own key and manages only its own
+     school. Talks to the Watnow backend on the api host; CSP pins script/connect
+     to self + that API only. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://api.rosniltech.com; connect-src 'self' https://api.rosniltech.com; font-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; upgrade-insecure-requests" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<title>Watnow — School panel</title>
+<style>
+  :root{
+    --bg:#0B0B0C; --surface:#18181B; --surface2:#242427; --border:#2E2E33;
+    --text:#FAFAF9; --muted:#A1A1AA; --primary:#2E8BC9; --primary2:#58B6EC;
+    --chip:#0A2A3E; --chipTx:#8CCBEE; --danger:#F87171; --dangerBg:#3b1517;
+    --warn:#FBBF24; --ok:#22C55E;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:15px}
+  a{color:var(--primary2)}
+  .wrap{max-width:960px;margin:0 auto;padding:0 16px 64px}
+  header{position:sticky;top:0;z-index:5;background:rgba(11,11,12,.86);backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--border)}
+  .bar{max-width:960px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;gap:12px}
+  .logo{width:30px;height:30px;border-radius:8px;background:#0B0B0C;border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;color:var(--primary2);font-weight:900}
+  .brand{font-weight:800;font-size:17px;letter-spacing:-.3px}
+  .brand small{color:var(--muted);font-weight:600;font-size:12px;margin-left:6px}
+  .grow{flex:1}
+  button{font:inherit;cursor:pointer;border:1px solid var(--border);background:var(--surface2);
+    color:var(--text);border-radius:10px;padding:8px 12px;font-weight:600}
+  button:hover{border-color:var(--primary)}
+  button.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+  button.danger{background:transparent;border-color:var(--danger);color:var(--danger)}
+  button.danger:hover{background:var(--dangerBg)}
+  button.ghost{background:transparent}
+  button:disabled{opacity:.5;cursor:default}
+  nav{display:flex;gap:6px;padding:8px 16px 0;max-width:960px;margin:0 auto;flex-wrap:wrap}
+  nav button{border:none;background:transparent;color:var(--muted);border-radius:10px;padding:8px 14px}
+  nav button.active{background:var(--surface);color:var(--primary2)}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:18px 0}
+  .tile{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px}
+  .tile .n{font-size:30px;font-weight:800;color:var(--primary2)}
+  .tile .l{color:var(--muted);font-size:13px;margin-top:2px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px;margin-bottom:12px}
+  .card h3{margin:0 0 4px;font-size:16px}
+  .row{display:flex;gap:12px;align-items:center}
+  .muted{color:var(--muted)}
+  .small{font-size:13px}
+  .tiny{font-size:11px}
+  .pill{display:inline-flex;align-items:center;gap:5px;background:var(--chip);color:var(--chipTx);
+    font-weight:700;font-size:11px;padding:3px 9px;border-radius:999px}
+  .pill.gray{background:var(--surface2);color:var(--muted)}
+  .pill.red{background:var(--dangerBg);color:var(--danger)}
+  code{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:2px 7px}
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:10px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+  th{color:var(--muted);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+  input,select,textarea{background:var(--surface2);border:1px solid var(--border);color:var(--text);
+    border-radius:10px;padding:10px 12px;font:inherit;width:100%}
+  textarea{resize:vertical;min-height:70px}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--surface);
+    border:1px solid var(--border);border-radius:12px;padding:12px 16px;box-shadow:0 10px 30px rgba(0,0,0,.4);
+    z-index:40;max-width:90vw}
+  .toast.err{border-color:var(--danger);color:var(--danger)}
+  .empty{text-align:center;color:var(--muted);padding:48px 12px}
+  #login{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:50;padding:24px}
+  #login .box{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--border);
+    border-radius:20px;padding:24px;text-align:center}
+  #login h1{font-size:20px;margin:12px 0 4px}
+  #login p{color:var(--muted);font-size:13px;margin:0 0 18px;line-height:19px}
+  #login input{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);
+    border-radius:12px;padding:12px 14px;font:inherit;margin-bottom:12px}
+  #login .logo{width:54px;height:54px;border-radius:14px;margin:0 auto;font-size:20px}
+  #login .err{color:var(--danger);font-size:13px;min-height:18px;margin-top:8px}
+  .hide{display:none!important}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:60;padding:24px}
+  .modal .box{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px}
+  .modal h3{margin:0 0 8px}
+  .modal p{color:var(--muted);font-size:14px;line-height:20px;margin:0 0 18px}
+  .modal .btns{display:flex;gap:10px;justify-content:flex-end}
+  label.fld{display:block;margin-bottom:10px}
+  label.fld .lab{display:block;color:var(--muted);font-size:12px;margin-bottom:5px}
+</style>
+</head>
+<body>
+  <div id="login">
+    <div class="box">
+      <div class="logo">W</div>
+      <h1>School panel</h1>
+      <p>Enter the school key the Watnow team gave you to manage your school.</p>
+      <input id="key" type="password" placeholder="School key" autocomplete="off" />
+      <button class="primary" style="width:100%" id="unlock">Sign in</button>
+      <div class="err" id="loginErr"></div>
+    </div>
+  </div>
+
+  <div id="app" class="hide">
+    <header>
+      <div class="bar">
+        <div class="logo">W</div>
+        <div class="brand">Watnow <small id="schoolName">school</small></div>
+        <div class="grow"></div>
+        <button class="ghost" id="refresh">Refresh</button>
+        <button class="ghost" id="logout">Sign out</button>
+      </div>
+      <nav id="nav">
+        <button data-tab="dashboard" class="active">Dashboard</button>
+        <button data-tab="projects">Projects</button>
+        <button data-tab="members">Members</button>
+        <button data-tab="invites">Pre-register</button>
+        <button data-tab="announce">Announcement</button>
+        <button data-tab="access">Access</button>
+      </nav>
+    </header>
+    <div class="wrap"><div id="content"></div></div>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+  var API = (function () {
+    try { var o = localStorage.getItem("watnow_school_api"); if (o) return o.replace(/\/+$/, ""); } catch (e) {}
+    var h = location.hostname;
+    if (h === "localhost" || h === "127.0.0.1") return location.origin;
+    return "https://api.rosniltech.com/watnow";
+  })();
+  var KKEY = "watnow_school_key";
+  var key = sessionStorage.getItem(KKEY) || "";
+  var tab = "dashboard";
+  var el = function(id){ return document.getElementById(id); };
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]; }); }
+  function fmtDay(ms){ if(!ms) return "—"; try{ return new Date(ms).toLocaleDateString(); }catch(e){ return "—"; } }
+  function toast(msg, isErr){ var t=document.createElement("div"); t.className="toast"+(isErr?" err":"");
+    t.textContent=msg; document.body.appendChild(t); setTimeout(function(){ t.remove(); }, 3200); }
+  function copyText(t){ try{ if(navigator.clipboard){ navigator.clipboard.writeText(t); return; } }catch(e){}
+    try{ var ta=document.createElement("textarea"); ta.value=t; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }catch(e){} }
+
+  function api(path, opts){
+    opts = opts || {};
+    opts.headers = Object.assign({ "x-school-key": key }, opts.headers||{});
+    if(opts.body && typeof opts.body!=="string"){ opts.headers["Content-Type"]="application/json"; opts.body=JSON.stringify(opts.body); }
+    return fetch(API+path, opts).then(function(r){
+      if(r.status===401){ logout(); throw new Error("Session expired — sign in again."); }
+      return r.json().catch(function(){ return {}; }).then(function(j){
+        if(!r.ok) throw new Error(j.error || ("Request failed ("+r.status+")"));
+        return j;
+      });
+    });
+  }
+
+  function confirmBox(title, body, danger){
+    return new Promise(function(resolve){
+      var m=document.createElement("div"); m.className="modal";
+      m.innerHTML='<div class="box"><h3>'+esc(title)+'</h3><p>'+esc(body)+'</p>'+
+        '<div class="btns"><button class="ghost" data-x>Cancel</button>'+
+        '<button class="'+(danger?"danger":"primary")+'" data-ok>'+(danger?"Confirm":"Confirm")+'</button></div></div>';
+      document.body.appendChild(m);
+      m.addEventListener("click",function(e){
+        if(e.target===m || e.target.hasAttribute("data-x")){ m.remove(); resolve(false); }
+        else if(e.target.hasAttribute("data-ok")){ m.remove(); resolve(true); }
+      });
+    });
+  }
+
+  function showLogin(){ el("login").classList.remove("hide"); el("app").classList.add("hide"); el("key").focus(); }
+  function showApp(){ el("login").classList.add("hide"); el("app").classList.remove("hide"); }
+  function logout(){ key=""; sessionStorage.removeItem(KKEY); showLogin(); }
+
+  function tryUnlock(){
+    var v = el("key").value.trim();
+    if(!v){ return; }
+    key = v; el("loginErr").textContent=""; el("unlock").disabled=true;
+    api("/school/me").then(function(me){
+      sessionStorage.setItem(KKEY, key);
+      current = me; el("schoolName").textContent = me.name || "school";
+      showApp(); render();
+    }).catch(function(e){
+      key="";
+      el("loginErr").textContent = e.message || "Could not sign in.";
+    }).finally(function(){ el("unlock").disabled=false; });
+  }
+
+  var current = null;         // last /school/me payload
+  function setBusy(){ el("content").innerHTML='<div class="empty">Loading…</div>'; }
+  function showErr(e){ el("content").innerHTML='<div class="empty">'+esc(e.message||"Something went wrong.")+'</div>'; }
+
+  function render(){
+    document.querySelectorAll("#nav button").forEach(function(b){ b.classList.toggle("active", b.dataset.tab===tab); });
+    if(tab==="dashboard") return renderDashboard();
+    if(tab==="projects") return renderProjects();
+    if(tab==="members") return renderMembers();
+    if(tab==="invites") return renderInvites();
+    if(tab==="announce") return renderAnnounce();
+    if(tab==="access") return renderAccess();
+  }
+
+  function tile(n,l){ return '<div class="tile"><div class="n">'+(n==null?"—":n)+'</div><div class="l">'+esc(l)+'</div></div>'; }
+
+  function renderDashboard(){
+    setBusy();
+    api("/school/me").then(function(me){
+      current = me; el("schoolName").textContent = me.name || "school";
+      var seatFull = me.seats>0 && me.seatsUsed>=me.seats;
+      var expired = me.expiresAt && Date.now()>me.expiresAt;
+      var seatsTxt = me.seats>0 ? (me.seatsUsed+" / "+me.seats) : (me.seatsUsed+" · unlimited");
+      var h = '<div class="tiles">'+
+        tile(me.students,"Students")+ tile(me.teachers,"Teachers")+
+        tile(me.members,"Members")+ tile(me.projects,"Projects")+
+      '</div>';
+      // Plan / seats
+      h += '<div class="card"><div class="row" style="flex-wrap:wrap;gap:22px">'+
+        '<div><div class="muted tiny">Plan</div>'+(me.plan?('<b>'+esc(me.plan)+'</b>'):'<span class="muted small">—</span>')+'</div>'+
+        '<div><div class="muted tiny">Seats used</div><b'+(seatFull?' style="color:var(--danger)"':'')+'>'+esc(seatsTxt)+'</b></div>'+
+        '<div><div class="muted tiny">Renews / expires</div>'+(me.expiresAt?('<b'+(expired?' style="color:var(--danger)"':'')+'>'+fmtDay(me.expiresAt)+'</b>'):'<span class="muted small">no expiry</span>')+'</div>'+
+      '</div>'+
+      (seatFull?'<div class="pill red" style="margin-top:10px">All seats used — new people can\'t join until one is freed or more are added.</div>':'')+
+      (expired?'<div class="pill red" style="margin-top:10px">Access expired — ask the Watnow team to renew.</div>':'')+
+      '</div>';
+      // Access quick-look
+      h += '<div class="card"><div class="row" style="flex-wrap:wrap;gap:22px">'+
+        '<div><div class="muted tiny">Access code</div><code style="font-weight:700;letter-spacing:1px">'+esc(me.code||"—")+'</code> <button class="ghost" id="d_copy" style="padding:3px 8px">Copy</button></div>'+
+        '<div><div class="muted tiny">Email domain</div>'+(me.domain?('<code>@'+esc(me.domain)+'</code>'):'<span class="muted small">none</span>')+'</div>'+
+        '<div><div class="muted tiny">Status</div><span class="pill '+(me.active?"":"gray")+'">'+(me.active?"Active":"Off")+'</span></div>'+
+      '</div></div>';
+      // Activity feed
+      h += '<div class="card"><h3>Recent activity</h3><div id="d_feed" class="small" style="margin-top:8px"><span class="muted">Loading…</span></div></div>';
+      el("content").innerHTML = h;
+      el("d_copy").addEventListener("click",function(){ copyText(me.code||""); toast("Code copied."); });
+      api("/school/activity").then(function(r){
+        var a = r.activity||[];
+        if(!a.length){ el("d_feed").innerHTML='<span class="muted">Nothing yet.</span>'; return; }
+        el("d_feed").innerHTML = a.slice(0,25).map(function(it){
+          var lbl = it.kind==="join"?"Join":it.kind==="completed"?"Done":"Project";
+          var txt = it.kind==="join" ? (esc(it.who)+" joined as "+(it.role==="teacher"?"a teacher":"a student"))
+            : it.kind==="completed" ? ("Project completed — "+esc(it.what))
+            : ("New project — "+esc(it.what));
+          return '<div class="row" style="gap:8px;padding:6px 0;border-bottom:1px solid var(--border)"><span class="pill '+(it.kind==="join"?"gray":"")+'">'+lbl+'</span><span>'+txt+'</span><span class="grow"></span><span class="tiny muted">'+fmtDay(it.at)+'</span></div>';
+        }).join('');
+      }).catch(function(){ el("d_feed").innerHTML='<span class="muted">Could not load activity.</span>'; });
+    }).catch(showErr);
+  }
+
+  function renderProjects(){
+    setBusy();
+    api("/school/projects").then(function(res){
+      var p = res.projects||[];
+      var h = '<div class="row" style="margin:6px 0 14px"><b>Projects</b><div class="grow"></div><span class="muted small">'+p.length+'</span></div>';
+      if(!p.length){ h += '<div class="card"><div class="empty">No projects yet. They show up here as your students create them.</div></div>'; }
+      else {
+        h += '<div class="card" style="padding:0;overflow:auto"><table><thead><tr><th>Project</th><th>Team</th><th>Status</th><th>Deadline</th></tr></thead><tbody>';
+        p.forEach(function(g){
+          var st = g.status==="completed"?"Completed":g.status==="archived"?"Archived":"Active";
+          var names = (g.memberNames||[]).slice(0,3).join(", ")+((g.memberNames||[]).length>3?"…":"");
+          h += '<tr><td><b>'+esc(g.name)+'</b><div class="tiny muted">started '+fmtDay(g.createdAt)+'</div></td>'+
+            '<td class="small">'+(g.memberCount||0)+(names?(' · '+esc(names)):"")+'</td>'+
+            '<td><span class="pill '+(g.status==="completed"?"":"gray")+'">'+st+'</span></td>'+
+            '<td class="small">'+fmtDay(g.deadline)+'</td></tr>';
+        });
+        h += '</tbody></table></div>';
+      }
+      el("content").innerHTML = h;
+    }).catch(showErr);
+  }
+
+  function renderInvites(){
+    setBusy();
+    api("/school/invites").then(function(res){
+      var inv = res.invites||[];
+      var h = '<div class="row" style="margin:6px 0 14px"><b>Pre-registered emails</b><div class="grow"></div><span class="muted small">'+inv.length+'</span></div>';
+      h += '<div class="card"><div class="muted small" style="margin-bottom:10px">Add people by email and they\'re let in automatically when they sign up — no code needed. Paste many at once (separate with commas, spaces or new lines).</div>'+
+        '<textarea id="iv_emails" placeholder="aditi@student.com, rahul@student.com"></textarea>'+
+        '<div class="row" style="margin-top:10px"><div class="grow"></div><button class="primary" id="iv_add">Add</button></div></div>';
+      if(!inv.length){ h += '<div class="card"><div class="empty">No pre-registered emails yet.</div></div>'; }
+      else {
+        h += '<div class="card" style="padding:0;overflow:auto"><table><thead><tr><th>Email</th><th>Added</th><th></th></tr></thead><tbody>';
+        inv.forEach(function(x){
+          h += '<tr><td class="small">'+esc(x.email)+'</td><td class="small muted">'+fmtDay(x.addedAt)+'</td>'+
+            '<td style="text-align:right"><button class="ghost iv-del" data-email="'+esc(x.email)+'">Remove</button></td></tr>';
+        });
+        h += '</tbody></table></div>';
+      }
+      el("content").innerHTML = h;
+      el("iv_add").addEventListener("click",function(){
+        var v = el("iv_emails").value.trim(); if(!v){ toast("Enter some emails.",true); return; }
+        var btn=this; btn.disabled=true;
+        api("/school/invites",{method:"POST",body:{emails:v}}).then(function(r){ toast("Added "+(r.added||0)+" email(s)."); renderInvites(); }).catch(function(e){ toast(e.message,true); btn.disabled=false; });
+      });
+      el("content").querySelectorAll(".iv-del").forEach(function(b){ b.addEventListener("click",function(){ api("/school/invites/delete",{method:"POST",body:{email:b.dataset.email}}).then(function(){ toast("Removed."); renderInvites(); }).catch(function(e){ toast(e.message,true); }); }); });
+    }).catch(showErr);
+  }
+
+  function renderMembers(){
+    setBusy();
+    api("/school/members").then(function(res){
+      var m = res.members || [];
+      var h = '<div class="row" style="margin:6px 0 14px"><b>Members</b><div class="grow"></div><span class="muted small">'+m.length+' total</span></div>';
+      h += '<div class="card" style="margin-bottom:10px"><input id="m_search" placeholder="Search name or email…"/></div>';
+      h += '<div class="card" style="padding:0;overflow:auto"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Access</th><th></th></tr></thead><tbody id="m_rows"></tbody></table></div>';
+      el("content").innerHTML = h;
+      function paint(){
+        var q = (el("m_search").value||"").toLowerCase();
+        var rows = m.filter(function(u){ return !q || (u.displayName+" "+u.email).toLowerCase().indexOf(q)>=0; }).map(function(u){
+          return '<tr>'+
+            '<td><b>'+esc(u.displayName||"—")+'</b><div class="tiny muted">joined '+fmtDay(u.createdAt)+'</div></td>'+
+            '<td class="small">'+esc(u.email||"—")+'</td>'+
+            '<td><span class="pill '+(u.role==="teacher"?"":"gray")+'">'+(u.role==="teacher"?"Teacher":"Student")+'</span></td>'+
+            '<td><span class="pill '+(u.entitled?"":"red")+'">'+(u.entitled?"Allowed":"Blocked")+'</span></td>'+
+            '<td class="small" style="text-align:right;white-space:nowrap"><button class="ghost m-toggle" data-uid="'+esc(u.uid)+'" data-allow="'+(u.entitled?"0":"1")+'">'+(u.entitled?"Block":"Allow")+'</button></td>'+
+          '</tr>';
+        }).join('');
+        el("m_rows").innerHTML = rows || '<tr><td colspan="5"><div class="empty">No members yet. Share your access code so people can join.</div></td></tr>';
+        el("m_rows").querySelectorAll(".m-toggle").forEach(function(b){ b.addEventListener("click",function(){
+          var allow = b.dataset.allow==="1";
+          confirmBox(allow?"Allow member":"Block member", allow?"Let this person use the app again?":"Block this person from using the app? They stay in your list and can be allowed again.", !allow).then(function(ok){
+            if(!ok) return; b.disabled=true;
+            api("/school/members/"+b.dataset.uid+"/access",{method:"POST",body:{allow:allow}}).then(function(){ toast(allow?"Member allowed.":"Member blocked."); renderMembers(); }).catch(function(e){ toast(e.message,true); b.disabled=false; });
+          });
+        }); });
+      }
+      paint();
+      el("m_search").addEventListener("input", paint);
+    }).catch(showErr);
+  }
+
+  function renderAnnounce(){
+    setBusy();
+    api("/school/me").then(function(me){
+      var a = me.announcement || {enabled:false,text:"",level:"info"};
+      var h = '<div class="row" style="margin:6px 0 14px"><b>Announcement</b></div>';
+      h += '<div class="card"><div class="muted small" style="margin-bottom:10px">A banner shown on the home screen to <b>your school\'s</b> students and teachers. It appears within seconds of saving — no app update needed.</div>'+
+        '<label class="row" style="gap:8px;cursor:pointer;margin-bottom:10px"><input type="checkbox" id="a_on" style="width:auto"'+(a.enabled?" checked":"")+'/> <span>Show the banner</span></label>'+
+        '<textarea id="a_text" maxlength="200" placeholder="e.g. Reminder: science projects are due Friday!">'+esc(a.text||"")+'</textarea>'+
+        '<div class="row" style="gap:10px;margin-top:10px"><label class="row" style="gap:6px"><span class="muted tiny">Style</span>'+
+          '<select id="a_level" style="max-width:160px"><option value="info"'+(a.level!=="warning"?" selected":"")+'>Info</option><option value="warning"'+(a.level==="warning"?" selected":"")+'>Warning</option></select></label>'+
+          '<div class="grow"></div><button class="primary" id="a_save">Save</button></div>'+
+      '</div>';
+      el("content").innerHTML = h;
+      el("a_save").addEventListener("click",function(){
+        var btn=this; btn.disabled=true;
+        api("/school/announcement",{method:"POST",body:{announcement:{enabled:el("a_on").checked,text:el("a_text").value,level:el("a_level").value}}})
+          .then(function(){ toast("Announcement saved."); btn.disabled=false; }).catch(function(e){ toast(e.message,true); btn.disabled=false; });
+      });
+    }).catch(showErr);
+  }
+
+  function renderAccess(){
+    setBusy();
+    api("/school/me").then(function(me){
+      var h = '<div class="row" style="margin:6px 0 14px"><b>Access</b></div>';
+      h += '<div class="card"><h3>Access code</h3><div class="muted small" style="margin:4px 0 10px">Students and teachers enter this once to unlock the app.</div>'+
+        '<div class="row" style="gap:10px"><code style="font-size:16px;font-weight:800;letter-spacing:2px">'+esc(me.code||"—")+'</code>'+
+        '<button class="ghost" id="ac_copy">Copy</button><div class="grow"></div><button class="ghost" id="ac_regen">Generate new code</button></div>'+
+        '<div class="muted tiny" style="margin-top:8px">Generating a new code turns off the old one immediately — anyone who hasn\'t unlocked yet will need the new one.</div></div>';
+      h += '<div class="card"><h3>Email domain</h3><div class="muted small" style="margin:4px 0 10px">Optional. Anyone whose email ends in this domain gets in automatically — no code needed.</div>'+
+        '<div class="row" style="gap:10px"><input id="ac_domain" value="'+esc(me.domain||"")+'" placeholder="stmarys.edu"/><button class="primary" id="ac_savedom" style="flex:none">Save</button></div></div>';
+      el("content").innerHTML = h;
+      el("ac_copy").addEventListener("click",function(){ copyText(me.code||""); toast("Code copied."); });
+      el("ac_regen").addEventListener("click",function(){
+        confirmBox("Generate a new code","The current code stops working right away. Continue?",false).then(function(ok){
+          if(!ok) return; api("/school/access",{method:"POST",body:{regenerateCode:true}}).then(function(){ toast("New code generated."); renderAccess(); }).catch(function(e){ toast(e.message,true); });
+        });
+      });
+      el("ac_savedom").addEventListener("click",function(){
+        var btn=this; btn.disabled=true;
+        api("/school/access",{method:"POST",body:{domain:el("ac_domain").value}}).then(function(r){ toast("Saved."); el("ac_domain").value = r.domain||""; btn.disabled=false; }).catch(function(e){ toast(e.message,true); btn.disabled=false; });
+      });
+    }).catch(showErr);
+  }
+
+  el("unlock").addEventListener("click", tryUnlock);
+  el("key").addEventListener("keydown", function(e){ if(e.key==="Enter") tryUnlock(); });
+  el("logout").addEventListener("click", logout);
+  el("refresh").addEventListener("click", render);
+  document.querySelectorAll("#nav button").forEach(function(b){
+    b.addEventListener("click", function(){ tab=b.dataset.tab; render(); });
+  });
+
+  if(key){ api("/school/me").then(function(me){ current=me; el("schoolName").textContent=me.name||"school"; showApp(); render(); }).catch(function(){ logout(); }); }
+  else { showLogin(); }
+})();
+</script>
+</body>
+</html>
